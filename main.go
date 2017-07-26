@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	injectEnviron()
+	injectEnv()
 
 	args := os.Args
 	if len(args) <= 1 {
@@ -39,7 +39,7 @@ func tracef(format string, v ...interface{}) {
 	log.Printf(format, v...)
 }
 
-func injectEnviron() {
+func injectEnv() {
 	prefix := os.Getenv("SSM2ENV_PREFIX")
 	if prefix == "" {
 		log.Fatal("No prefix was specified.")
@@ -48,32 +48,13 @@ func injectEnviron() {
 
 	log.Printf("parameter prefix: %s", prefix)
 
-	sess, err := session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	})
+	svc, err := getSSMService()
 	if err != nil {
-		trace(err)
-		trace("failed to create session")
+		log.Fatal(err)
 		return
 	}
-	if *sess.Config.Region == "" {
-		trace("no explict region configuration. So now retriving ec2metadata...")
-		region, err := ec2metadata.New(sess).Region()
-		if err != nil {
-			trace(err)
-			trace("could not find region configuration")
-			return
-		}
-		sess.Config.Region = aws.String(region)
-	}
 
-	var svc *ssm.SSM
-	if arn := os.Getenv("ENV_INJECTOR_ASSUME_ROLE_ARN"); arn != "" {
-		creds := stscreds.NewCredentials(sess, arn)
-		svc = ssm.New(sess, &aws.Config{Credentials: creds})
-	} else {
-		svc = ssm.New(sess)
-	}
+	svc.DescribeParameters()
 
 	// result, err := svc.GetParameters(&ssm.GetParametersInput{
 	// 	Names:          names,
@@ -92,4 +73,28 @@ func injectEnviron() {
 	// 	os.Setenv(key, *param.Value)
 	// 	tracef("env injected: %s", key)
 	// }
+}
+
+func getSSMService() (svc *ssm.SSM, err error) {
+	sess, err := session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if *sess.Config.Region == "" {
+		log.Println("no explict region configuration. So now retriving ec2metadata...")
+		region, err := ec2metadata.New(sess).Region()
+		if err != nil {
+			return nil, err
+		}
+		sess.Config.Region = aws.String(region)
+	}
+	if arn := os.Getenv("ENV_INJECTOR_ASSUME_ROLE_ARN"); arn != "" {
+		creds := stscreds.NewCredentials(sess, arn)
+		svc = ssm.New(sess, &aws.Config{Credentials: creds})
+	} else {
+		svc = ssm.New(sess)
+	}
+	return
 }
