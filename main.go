@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -12,22 +14,16 @@ import (
 	"github.com/k0kubun/pp"
 )
 
+var prefixOption = "SSM2ENV_PREFIX"
+
 func main() {
 	injectEnv()
 }
 
-func trace(v ...interface{}) {
-	log.Println(v...)
-}
-
-func tracef(format string, v ...interface{}) {
-	log.Printf(format, v...)
-}
-
 func injectEnv() {
-	prefix := os.Getenv("SSM2ENV_PREFIX")
+	prefix := os.Getenv(prefixOption)
 	if prefix == "" {
-		log.Fatal("No prefix was specified.")
+		log.Fatal(fmt.Sprintf("No prefix was specified with the option: `%f`.", prefixOption))
 		return
 	}
 
@@ -39,21 +35,28 @@ func injectEnv() {
 		return
 	}
 
-	keys, err := getStoredKeys(svc)
+	allKeys, err := getStoredKeys(svc)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
+	log.Print(pp.Sprint(allKeys))
+
+	keys := Filter(allKeys, func(v string) bool {
+		return strings.HasPrefix(v, prefix)
+	})
 	log.Print(pp.Sprint(keys))
 
-	// result, err := svc.GetParameters(&ssm.GetParametersInput{
-	// 	Names:          names,
-	// 	WithDecryption: aws.Bool(true),
-	// })
-	// if err != nil {
-	// 	trace(err)
-	// 	return
-	// }
+	names := aws.StringSlice(keys)
+	result, err := svc.GetParameters(&ssm.GetParametersInput{
+		Names:          names,
+		WithDecryption: aws.Bool(true),
+	})
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	log.Print(pp.Sprint(result))
 
 	// for _, key := range result.InvalidParameters {
 	// 	tracef("invalid parameter: %s", *key)
@@ -106,4 +109,14 @@ func getStoredKeys(svc *ssm.SSM) ([]string, error) {
 	}
 
 	return h, nil
+}
+
+func Filter(vs []string, f func(string) bool) []string {
+	vsf := make([]string, 0)
+	for _, v := range vs {
+		if f(v) {
+			vsf = append(vsf, v)
+		}
+	}
+	return vsf
 }
