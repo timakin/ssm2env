@@ -116,6 +116,10 @@ func getEnvMap(svc *ssm.SSM, prefix string, keys []string) (map[string]string, e
 	})
 
 	replacer := strings.NewReplacer(fmt.Sprintf("%f.", prefix), "")
+	for i := range result.Parameters {
+		param := result.Parameters[i]
+		envMap[replacer.Replace(*param.Name)] = *param.Value
+	}
 	return envMap, nil
 }
 
