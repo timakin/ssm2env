@@ -47,11 +47,7 @@ func injectEnv() {
 	})
 	log.Print(pp.Sprint(keys))
 
-	names := aws.StringSlice(keys)
-	result, err := svc.GetParameters(&ssm.GetParametersInput{
-		Names:          names,
-		WithDecryption: aws.Bool(true),
-	})
+	envMap, err := getEnvMap(svc, prefix, keys)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -109,6 +105,18 @@ func getStoredKeys(svc *ssm.SSM) ([]string, error) {
 	}
 
 	return h, nil
+}
+
+func getEnvMap(svc *ssm.SSM, prefix string, keys []string) (map[string]string, error) {
+	var envMap = map[string]string{}
+	names := aws.StringSlice(keys)
+	result, err := svc.GetParameters(&ssm.GetParametersInput{
+		Names:          names,
+		WithDecryption: aws.Bool(true),
+	})
+
+	replacer := strings.NewReplacer(fmt.Sprintf("%f.", prefix), "")
+	return envMap, nil
 }
 
 func Filter(vs []string, f func(string) bool) []string {
