@@ -3,32 +3,17 @@ package main
 import (
 	"log"
 	"os"
-	"os/exec"
-	"syscall"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/k0kubun/pp"
 )
 
 func main() {
 	injectEnv()
-
-	args := os.Args
-	if len(args) <= 1 {
-		log.Fatal("missing command")
-	}
-
-	path, err := exec.LookPath(args[1])
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = syscall.Exec(path, args[1:], os.Environ())
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func trace(v ...interface{}) {
@@ -54,7 +39,12 @@ func injectEnv() {
 		return
 	}
 
-	svc.DescribeParameters()
+	keys, err := getStoredKeys(svc)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	log.Print(pp.Sprint(keys))
 
 	// result, err := svc.GetParameters(&ssm.GetParametersInput{
 	// 	Names:          names,
@@ -97,4 +87,23 @@ func getSSMService() (svc *ssm.SSM, err error) {
 		svc = ssm.New(sess)
 	}
 	return
+}
+
+func getStoredKeys(svc *ssm.SSM) ([]string, error) {
+	var h = []string{}
+
+	input := &ssm.DescribeParametersInput{}
+	err := svc.DescribeParametersPages(input,
+		func(page *ssm.DescribeParametersOutput, lastPage bool) bool {
+			for i := range page.Parameters {
+				param := page.Parameters[i]
+				h = append(h, *param.Name)
+			}
+			return !lastPage
+		})
+	if err != nil {
+		return []string{}, err
+	}
+
+	return h, nil
 }
