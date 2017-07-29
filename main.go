@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/k0kubun/pp"
+	"golang.org/x/sync/errgroup"
 )
 
 var prefixOption = "SSM2ENV_PREFIX"
@@ -40,19 +42,18 @@ func injectEnv() {
 		log.Fatal(err)
 		return
 	}
-	log.Print(pp.Sprint(allKeys))
 
 	keys := Filter(allKeys, func(v string) bool {
 		return strings.HasPrefix(v, prefix)
 	})
-	log.Print(pp.Sprint(keys))
 
-	envMap, err := getEnvMap(svc, prefix, keys)
+	ctx := context.Background()
+	envMap, err := getEnvMap(ctx, svc, prefix, keys)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
-	log.Print(pp.Sprint(result))
+	log.Print(pp.Sprint(envMap))
 
 	// for _, key := range result.InvalidParameters {
 	// 	tracef("invalid parameter: %s", *key)
@@ -107,19 +108,51 @@ func getStoredKeys(svc *ssm.SSM) ([]string, error) {
 	return h, nil
 }
 
-func getEnvMap(svc *ssm.SSM, prefix string, keys []string) (map[string]string, error) {
+func getEnvMap(ctx context.Context, svc *ssm.SSM, prefix string, keys []string) (map[string]string, error) {
 	var envMap = map[string]string{}
-	names := aws.StringSlice(keys)
-	result, err := svc.GetParameters(&ssm.GetParametersInput{
-		Names:          names,
-		WithDecryption: aws.Bool(true),
-	})
+	eg, ctx := errgroup.WithContext(context.Background())
 
-	replacer := strings.NewReplacer(fmt.Sprintf("%f.", prefix), "")
-	for i := range result.Parameters {
-		param := result.Parameters[i]
-		envMap[replacer.Replace(*param.Name)] = *param.Value
+	c := make(chan map[string]string)
+	for chunkedKeys := range Chunks(keys, 10) {
+		chunkedKeys := chunkedKeys // https://golang.org/doc/faq#closures_and_goroutines
+		eg.Go(func() error {
+			m := map[string]string{}
+			names := aws.StringSlice(chunkedKeys)
+			result, err := svc.GetParameters(&ssm.GetParametersInput{
+				Names:          names,
+				WithDecryption: aws.Bool(true),
+			})
+			if err != nil {
+				return err
+			}
+
+			oldKey := fmt.Sprintf("%s.", prefix)
+			newKey := ""
+			replacer := strings.NewReplacer(oldKey, newKey)
+			for i := range result.Parameters {
+				param := result.Parameters[i]
+				key := replacer.Replace(*param.Name)
+				val := *param.Value
+				m[key] = val
+			}
+			select {
+			case c <- m:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			return nil
+		})
 	}
+	go func() {
+		eg.Wait()
+		close(c)
+	}()
+
+	for r := range c {
+		envMap = Merge(envMap, r)
+	}
+
 	return envMap, nil
 }
 
@@ -131,4 +164,33 @@ func Filter(vs []string, f func(string) bool) []string {
 		}
 	}
 	return vsf
+}
+
+func Chunks(l []string, n int) chan []string {
+	ch := make(chan []string)
+
+	go func() {
+		for i := 0; i < len(l); i = i + n {
+			fromIdx := i
+			toIdx := i + n
+			if toIdx > len(l) {
+				toIdx = len(l)
+			}
+			ch <- l[fromIdx:toIdx]
+		}
+		close(ch)
+	}()
+	return ch
+}
+
+func Merge(m1, m2 map[string]string) map[string]string {
+	ans := map[string]string{}
+
+	for k, v := range m1 {
+		ans[k] = v
+	}
+	for k, v := range m2 {
+		ans[k] = v
+	}
+	return (ans)
 }
