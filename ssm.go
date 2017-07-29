@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -15,12 +16,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func getSSMService() (svc *ssm.SSM, err error) {
+type Service struct {
+	SSMClient *ssm.SSM
+}
+
+func NewService() (service *Service, err error) {
 	sess, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 	})
 	if err != nil {
-		return nil, err
+		return
 	}
 	if *sess.Config.Region == "" {
 		log.Println("no explict region configuration. So now retriving ec2metadata...")
@@ -30,20 +35,26 @@ func getSSMService() (svc *ssm.SSM, err error) {
 		}
 		sess.Config.Region = aws.String(region)
 	}
-	if arn := os.Getenv("ENV_INJECTOR_ASSUME_ROLE_ARN"); arn != "" {
+	var client *ssm.SSM
+	if arn := os.Getenv("SSM2ENV_ASSUME_ROLE_ARN"); arn != "" {
 		creds := stscreds.NewCredentials(sess, arn)
-		svc = ssm.New(sess, &aws.Config{Credentials: creds})
+		client = ssm.New(sess, &aws.Config{Credentials: creds})
 	} else {
-		svc = ssm.New(sess)
+		client = ssm.New(sess)
 	}
+
+	service = &Service{
+		SSMClient: client,
+	}
+
 	return
 }
 
-func getStoredKeys(svc *ssm.SSM) ([]string, error) {
+func (s *Service) GetStoredKeys() ([]string, error) {
 	var h = []string{}
 
 	input := &ssm.DescribeParametersInput{}
-	err := svc.DescribeParametersPages(input,
+	err := s.SSMClient.DescribeParametersPages(input,
 		func(page *ssm.DescribeParametersOutput, lastPage bool) bool {
 			for i := range page.Parameters {
 				param := page.Parameters[i]
@@ -58,9 +69,9 @@ func getStoredKeys(svc *ssm.SSM) ([]string, error) {
 	return h, nil
 }
 
-func getEnvMap(ctx context.Context, svc *ssm.SSM, prefix string, keys []string) (map[string]string, error) {
+func (s *Service) GetEnvMap(ctx context.Context, prefix string, keys []string) (map[string]string, error) {
 	var envMap = map[string]string{}
-	eg, ctx := errgroup.WithContext(context.Background())
+	eg, ctx := errgroup.WithContext(ctx)
 
 	c := make(chan map[string]string)
 	for chunkedKeys := range Chunks(keys, 10) {
@@ -68,7 +79,7 @@ func getEnvMap(ctx context.Context, svc *ssm.SSM, prefix string, keys []string) 
 		eg.Go(func() error {
 			m := map[string]string{}
 			names := aws.StringSlice(chunkedKeys)
-			result, err := svc.GetParameters(&ssm.GetParametersInput{
+			result, err := s.SSMClient.GetParameters(&ssm.GetParametersInput{
 				Names:          names,
 				WithDecryption: aws.Bool(true),
 			})
@@ -104,4 +115,24 @@ func getEnvMap(ctx context.Context, svc *ssm.SSM, prefix string, keys []string) 
 	}
 
 	return envMap, nil
+}
+
+func OutputFile(envMap map[string]string) error {
+	envFile, err := filepath.Abs(filepath.Join("/", "etc", "profile.d", "loadenv_fromssm.sh"))
+	if err != nil {
+		return err
+	}
+	file, err := os.Create(envFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	var output string
+	for key, val := range envMap {
+		output = output + fmt.Sprintf("export %s=%s\n", key, val)
+	}
+	file.Write(([]byte)(output))
+
+	return nil
 }

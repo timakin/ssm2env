@@ -6,17 +6,11 @@ import (
 	"log"
 	"os"
 	"strings"
-
-	"github.com/k0kubun/pp"
 )
 
 var prefixOption = "SSM2ENV_PREFIX"
 
 func main() {
-	_main()
-}
-
-func _main() {
 	prefix := os.Getenv(prefixOption)
 	if prefix == "" {
 		log.Fatal(fmt.Sprintf("No prefix was specified with the option: `%f`.", prefixOption))
@@ -25,13 +19,13 @@ func _main() {
 
 	log.Printf("parameter prefix: %s", prefix)
 
-	svc, err := getSSMService()
+	svc, err := NewService()
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
-	allKeys, err := getStoredKeys(svc)
+	allKeys, err := svc.GetStoredKeys()
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -42,19 +36,15 @@ func _main() {
 	})
 
 	ctx := context.Background()
-	envMap, err := getEnvMap(ctx, svc, prefix, keys)
+	envMap, err := svc.GetEnvMap(ctx, prefix, keys)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
-	log.Print(pp.Sprint(envMap))
 
-	// for _, key := range result.InvalidParameters {
-	// 	tracef("invalid parameter: %s", *key)
-	// }
-	// for _, param := range result.Parameters {
-	// 	key := strings.TrimPrefix(*param.Name, prefix)
-	// 	os.Setenv(key, *param.Value)
-	// 	tracef("env injected: %s", key)
-	// }
+	err = OutputFile(envMap)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 }
