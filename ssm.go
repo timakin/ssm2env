@@ -119,7 +119,7 @@ func (s *Service) GetEnvMap(ctx context.Context, prefix string, keys []string) (
 }
 
 func OutputFile(envMap map[string]string) error {
-	dirPath, err := filepath.Abs(filepath.Join("./", "etc", "profile.d"))
+	dirPath, err := filepath.Abs(filepath.Join("/", "etc", "profile.d"))
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func OutputFile(envMap map[string]string) error {
 		os.MkdirAll(dirPath, 0777)
 	}
 
-	envFile, err := filepath.Abs(filepath.Join("./", "etc", "profile.d", "loadenv_fromssm.sh"))
+	envFile, err := filepath.Abs(filepath.Join("/", "etc", "profile.d", "loadenv_fromssm.sh"))
 	if err != nil {
 		return err
 	}
