@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/k0kubun/pp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -118,12 +119,22 @@ func (s *Service) GetEnvMap(ctx context.Context, prefix string, keys []string) (
 }
 
 func OutputFile(envMap map[string]string) error {
-	envFile, err := filepath.Abs(filepath.Join("/", "etc", "profile.d", "loadenv_fromssm.sh"))
+	dirPath, err := filepath.Abs(filepath.Join("./", "etc", "profile.d"))
 	if err != nil {
 		return err
 	}
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		os.MkdirAll(dirPath, 0777)
+	}
+
+	envFile, err := filepath.Abs(filepath.Join("./", "etc", "profile.d", "loadenv_fromssm.sh"))
+	if err != nil {
+		return err
+	}
+
 	file, err := os.Create(envFile)
 	if err != nil {
+		pp.Print("2")
 		return err
 	}
 	defer file.Close()
