@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/k0kubun/pp"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -155,16 +153,4 @@ func OutputFile(envMap map[string]string) error {
 	file.Write(([]byte)(output))
 
 	return nil
-}
-
-func RunScript() error {
-	envFile, err := filepath.Abs(filepath.Join(envLoaderPath...))
-	if err != nil {
-		return err
-	}
-	pp.Print(envFile)
-	cmd := exec.Command("bash", "-c", fmt.Sprintf("source %s", envFile))
-	pp.Print(cmd)
-	_, err = cmd.Output()
-	return err
 }
