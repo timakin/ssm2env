@@ -13,7 +13,7 @@ var prefixOption = "SSM2ENV_PREFIX"
 func main() {
 	prefix := os.Getenv(prefixOption)
 	if prefix == "" {
-		log.Fatal(fmt.Sprintf("No prefix was specified with the option: `%f`.", prefixOption))
+		log.Fatal(fmt.Sprintf("No prefix was specified with the option: `%s`.", prefixOption))
 		return
 	}
 
@@ -43,6 +43,12 @@ func main() {
 	}
 
 	err = OutputFile(envMap)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	err = RunScript()
 	if err != nil {
 		log.Fatal(err)
 		return

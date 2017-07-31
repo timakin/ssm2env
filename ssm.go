@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -16,6 +17,10 @@ import (
 	"github.com/k0kubun/pp"
 	"golang.org/x/sync/errgroup"
 )
+
+var envLoaderDir = []string{"./", "etc", "profile.d"}
+var envLoaderFile = "loadenv_fromssm.sh"
+var envLoaderPath = append(envLoaderDir, []string{envLoaderFile}...)
 
 type Service struct {
 	SSMClient *ssm.SSM
@@ -119,7 +124,7 @@ func (s *Service) GetEnvMap(ctx context.Context, prefix string, keys []string) (
 }
 
 func OutputFile(envMap map[string]string) error {
-	dirPath, err := filepath.Abs(filepath.Join("/", "etc", "profile.d"))
+	dirPath, err := filepath.Abs(filepath.Join(envLoaderDir...))
 	if err != nil {
 		return err
 	}
@@ -127,17 +132,21 @@ func OutputFile(envMap map[string]string) error {
 		os.MkdirAll(dirPath, 0777)
 	}
 
-	envFile, err := filepath.Abs(filepath.Join("/", "etc", "profile.d", "loadenv_fromssm.sh"))
+	envFile, err := filepath.Abs(filepath.Join(envLoaderPath...))
 	if err != nil {
 		return err
 	}
 
 	file, err := os.Create(envFile)
+	defer file.Close()
 	if err != nil {
-		pp.Print("2")
 		return err
 	}
-	defer file.Close()
+
+	file.Chmod(0777)
+	if err != nil {
+		return err
+	}
 
 	var output string
 	for key, val := range envMap {
@@ -146,4 +155,16 @@ func OutputFile(envMap map[string]string) error {
 	file.Write(([]byte)(output))
 
 	return nil
+}
+
+func RunScript() error {
+	envFile, err := filepath.Abs(filepath.Join(envLoaderPath...))
+	if err != nil {
+		return err
+	}
+	pp.Print(envFile)
+	cmd := exec.Command("bash", "-c", fmt.Sprintf("source %s", envFile))
+	pp.Print(cmd)
+	_, err = cmd.Output()
+	return err
 }
