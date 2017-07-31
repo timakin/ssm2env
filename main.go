@@ -47,10 +47,4 @@ func main() {
 		log.Fatal(err)
 		return
 	}
-
-	err = RunScript()
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
 }
