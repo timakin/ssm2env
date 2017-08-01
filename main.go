@@ -23,7 +23,9 @@ func main() {
 		return
 	}
 
-	log.Printf("Parameter prefix: %s", prefix)
+	if *verbose {
+		log.Printf("Parameter prefix: %s", prefix)
+	}
 
 	svc, err := NewService()
 	if err != nil {

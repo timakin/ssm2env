@@ -127,7 +127,10 @@ func OutputFile(envMap map[string]string) error {
 		return err
 	}
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-		os.MkdirAll(dirPath, 0755)
+		err = os.MkdirAll(dirPath, 0755)
+		if err != nil {
+			return err
+		}
 	}
 
 	envFile, err := filepath.Abs(filepath.Join(envLoaderPath...))
@@ -151,6 +154,8 @@ func OutputFile(envMap map[string]string) error {
 		output = output + fmt.Sprintf("export %s=%s\n", key, val)
 	}
 	file.Write(([]byte)(output))
+
+	log.Println(fmt.Sprintf("output file was generated. (path: %s)", envFile))
 
 	return nil
 }
