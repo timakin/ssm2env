@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,11 @@ import (
 )
 
 var prefixOption = "SSM2ENV_PREFIX"
+var verbose = flag.Bool("v", false, "verbose option")
+
+func init() {
+	flag.Parse()
+}
 
 func main() {
 	prefix := os.Getenv(prefixOption)
@@ -17,7 +23,7 @@ func main() {
 		return
 	}
 
-	log.Printf("parameter prefix: %s", prefix)
+	log.Printf("Parameter prefix: %s", prefix)
 
 	svc, err := NewService()
 	if err != nil {
@@ -40,6 +46,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 		return
+	}
+
+	if *verbose {
+		log.Println("Parsed environments from SSM...")
+		for k, v := range envMap {
+			log.Println(fmt.Sprintf("key: %s, value: %s", k, v))
+		}
 	}
 
 	err = OutputFile(envMap)
