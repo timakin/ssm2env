@@ -16,7 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var envLoaderDir = []string{"./", "etc", "profile.d"}
+var envLoaderDir = []string{"/", "etc", "profile.d"}
 var envLoaderFile = "loadenv_fromssm.sh"
 var envLoaderPath = append(envLoaderDir, []string{envLoaderFile}...)
 
@@ -155,7 +155,7 @@ func OutputFile(envMap map[string]string) error {
 	}
 	file.Write(([]byte)(output))
 
-	log.Println(fmt.Sprintf("output file was generated. (path: %s)", envFile))
+	log.Println(fmt.Sprintf("output file was placed to %s", envFile))
 
 	return nil
 }

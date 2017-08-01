@@ -36,7 +36,7 @@ $ aws ssm get-parameters --with-decryption --names testapi.prod.DB_USER testapi.
 
 # Usage
 
-Inside your server with aws credentials, just type `SSM2ENV_PREFIX=testapi.prod ssm2env` .
+Inside your server with aws credentials, just type `SSM2ENV_PREFIX=testapi.prod ssm2env [-v]` .
 
 This command will generate the script to export the environments.
 
