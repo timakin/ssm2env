@@ -111,9 +111,11 @@ func (s *Service) GetEnvMap(ctx context.Context, prefix string, keys []string) (
 		})
 	}
 
-	if err := eg.Wait(); err != nil {
-		return envMap, err
-	}
+	go func() {
+		if err := eg.Wait(); err != nil {
+			return envMap, err
+		}
+	}()
 
 	for r := range c {
 		envMap = Merge(envMap, r)
