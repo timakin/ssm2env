@@ -78,7 +78,6 @@ func (s *Service) GetEnvMap(ctx context.Context, prefix string, keys []string) (
 	eg, ctx := errgroup.WithContext(ctx)
 
 	c := make(chan map[string]string)
-	defer close(c)
 	for chunkedKeys := range Chunks(keys, 10) {
 		chunkedKeys := chunkedKeys // https://golang.org/doc/faq#closures_and_goroutines
 		eg.Go(func() error {
@@ -112,9 +111,8 @@ func (s *Service) GetEnvMap(ctx context.Context, prefix string, keys []string) (
 	}
 
 	go func() {
-		if err := eg.Wait(); err != nil {
-			return envMap, err
-		}
+		eg.Wait()
+		close(c)
 	}()
 
 	for r := range c {
